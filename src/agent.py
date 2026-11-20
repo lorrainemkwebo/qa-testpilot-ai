@@ -4,28 +4,42 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def generate_test_cases(requirement):
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    response = client.responses.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-        instructions=(
-            "You are a QA testing assistant. "
-            "Generate positive, negative and edge test cases "
-            "from software requirements. "
-            "Identify unclear or missing requirements. "
-            "Return only valid JSON with two keys: "
-            "'test_cases' and 'questions'. "
-            "Each test case must have an id, title, "
-            "steps and expected_result."
-        ),
-        input=requirement
+    # Connect to GroqCloud
+    client = OpenAI(
+        api_key=os.getenv("GROQ_API_KEY"),
+        base_url="https://api.groq.com/openai/v1"
     )
 
-    return json.loads(response.output_text)
+    response = client.chat.completions.create(
+        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a QA testing assistant. "
+                    "Generate positive, negative and edge test cases "
+                    "from software requirements. "
+                    "Identify unclear or missing requirements. "
+                    "Return only valid JSON with two keys: "
+                    "'test_cases' and 'questions'. "
+                    "Each test case must have an id, title, "
+                    "steps and expected_result. "
+                    "Do not invent missing requirements."
+                )
+            },
+            {
+                "role": "user",
+                "content": requirement
+            }
+        ],
+        response_format={"type": "json_object"}
+    )
+
+    return json.loads(response.choices[0].message.content)
 
 
 def main():
@@ -48,7 +62,7 @@ def main():
         ).strip().lower()
 
         if approval == "yes":
-            with open("test_cases.json", "w") as file:
+            with open("test_cases.json", "w", encoding="utf-8") as file:
                 json.dump(result, file, indent=2)
 
             print("Test cases saved successfully!")
